@@ -1,0 +1,52 @@
+[build-system]
+requires = ["briefcase"]
+build-backend = "briefcase.integrations.setuptools"
+
+[project]
+name = "oxygenmovil"
+version = "0.1.0"
+description = "Cliente móvil de Oxygen para el curso de Puesta en Producción Segura"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# Sin dependencias globales: en Android solo funcionan paquetes de Python puro
+dependencies = []
+
+[tool.briefcase]
+project_name = "Oxygen Móvil"
+bundle = "es.cifpaviles.pps"
+version = "0.1.0"
+url = "https://github.com/pps-cifpaviles/plantilla-movil"
+license.file = "LICENSE"
+author = "CIFP Avilés"
+author_email = "pps@cifpaviles.invalid"
+
+[tool.briefcase.app.oxygenmovil]
+formal_name = "Oxygen Móvil"
+description = "Consulta tus actividades y tu huella de carbono en Oxygen"
+long_description = "Cliente Toga de la API de Oxygen, con vulnerabilidades sembradas para practicar el análisis de aplicaciones móviles (OWASP MASVS/MASTG)."
+sources = ["src/oxygenmovil"]
+test_sources = ["tests"]
+requires = []
+test_requires = ["pytest"]
+
+[tool.briefcase.app.oxygenmovil.linux]
+requires = ["toga-gtk~=0.5.0"]
+
+[tool.briefcase.app.oxygenmovil.windows]
+requires = ["toga-winforms~=0.5.0"]
+
+[tool.briefcase.app.oxygenmovil.macOS]
+requires = ["toga-cocoa~=0.5.0", "std-nslog~=1.0.3"]
+
+[tool.briefcase.app.oxygenmovil.android]
+requires = ["toga-android~=0.5.0"]
+base_theme = "Theme.MaterialComponents.Light.DarkActionBar"
+build_gradle_dependencies = [
+    "com.google.android.material:material:1.11.0",
+    "androidx.appcompat:appcompat:1.6.1",
+    "androidx.constraintlayout:constraintlayout:2.1.4",
+    "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0",
+]
+# Permite tráfico HTTP sin cifrar hacia cualquier servidor
+android_manifest_application_attrs_extra_content = 'android:usesCleartextTraffic="true"'

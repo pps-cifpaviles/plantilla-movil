@@ -1,0 +1,97 @@
+# Pipeline base de Oxygen Móvil — Puesta en Producción Segura
+#
+# - test: tests de Python (sin interfaz) en cada PR y push.
+# - build-apk: compila el APK de depuración con Briefcase en un runner de GitHub.
+# - mobsf: análisis estático con MobSF en pps-dev. Solo en push (necesita la red del aula).
+
+name: pipeline
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.12'
+  BRIEFCASE_VERSION: '0.4.6'
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install pytest
+      - run: PYTHONPATH=src pytest -q tests
+
+  build-apk:
+    name: Build APK (Briefcase)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Caché de Briefcase (SDK y JDK de Android)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/briefcase
+          key: briefcase-${{ runner.os }}-${{ env.BRIEFCASE_VERSION }}
+      - run: pip install briefcase==${{ env.BRIEFCASE_VERSION }}
+      - name: Crear, compilar y empaquetar
+        run: |
+          briefcase create android --no-input
+          briefcase build android --no-input
+          briefcase package android -p debug-apk --no-input
+      - name: Localizar el APK
+        id: apk
+        run: |
+          APK=$(find dist build -name '*.apk' -type f | head -1)
+          test -n "$APK" || { echo "::error::No se ha generado el APK"; exit 1; }
+          cp "$APK" oxygenmovil-debug.apk
+          sha256sum oxygenmovil-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: oxygenmovil-debug.apk
+          retention-days: 14
+
+  mobsf:
+    name: Análisis estático (MobSF)
+    if: github.event_name == 'push'
+    needs: build-apk
+    runs-on: [self-hosted, pps-dev]
+    environment: desarrollo
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+      - name: Subir a MobSF y descargar el informe
+        env:
+          KEY: ${{ secrets.MOBSF_API_KEY }}
+          MOBSF: http://localhost:8000
+        run: |
+          test -n "$KEY" || { echo "::error::Falta el secreto MOBSF_API_KEY"; exit 1; }
+          H=$(curl -fs -F "file=@oxygenmovil-debug.apk" -H "Authorization: $KEY" "$MOBSF/api/v1/upload" | jq -r .hash)
+          curl -fs -X POST -d "hash=$H" -H "Authorization: $KEY" "$MOBSF/api/v1/scan" > /dev/null
+          curl -fs -X POST -d "hash=$H" -H "Authorization: $KEY" "$MOBSF/api/v1/report_json" -o mobsf.json
+          curl -fs -X POST -d "hash=$H" -H "Authorization: $KEY" "$MOBSF/api/v1/scorecard" -o scorecard.json
+          echo "Informe MobSF: $MOBSF/static_analyzer/$H/" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobsf
+          path: '*.json'

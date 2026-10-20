@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+*.dist-info/
+
+# BeeWare / Briefcase specific
+.briefcase/
+logs/
+iOS/
+android/
+linux/
+windows/
+macOS/
+
+# Briefcase
+build/
+dist/
+logs/
+*.apk
+.venv/
